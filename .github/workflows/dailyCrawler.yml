@@ -29,14 +29,3 @@ jobs:
         LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
         LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
       run: python ptt_crawler_online.py
-        
-    - name: Send failure notification
-      if: failure()
-      run: |
-        curl -v -X POST https://api.line.me/v2/bot/message/push \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer ${{ secrets.LINE_TOKEN }}" \
-        -d '{
-          "to": "${{ secrets.LINE_USER_ID }}",
-          "messages": [{"type": "text", "text": "爬蟲執行失敗，請檢查 GitHub Actions 日誌"}]
-        }'
