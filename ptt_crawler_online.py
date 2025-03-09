@@ -15,8 +15,7 @@ class PTTCrawler:
         }
         self.base_url = 'https://www.ptt.cc'
         self.board = 'Drama-Ticket'
-        # self.output_dir = 'ptt_drama_ticket_data'
-        self.output_dir = '/home/wenl51195/ptt_crawler/ptt_drama_ticket_data' # PythonAnywhere 檔案存取路徑
+        self.output_dir = './ptt_drama_ticket_data'
         self.keyword = 'gracie'  # 關鍵字不區分大小寫
         self.cache_file = f"{self.output_dir}/article_cache.json"
         self.line_token = line_token
@@ -275,29 +274,17 @@ class PTTCrawler:
 
 def main():
     # 配置參數
-    LINE_TOKEN = "VyoaH4TP9pUML2+8BffiuuiHSe2LlshA4gSG8yxQ590jdtTToVrFNmsH/" \
-    "G6kJDKMRMlygRf7BKPKkuCJPD5QTmEV2bUkHYl6jWe3Hem8nD478x0RSWdnSEMrYUE3E8ejDelU7J73/" \
-    "d987Eg7sqPhggdB04t89/1O/w1cDnyilFU="
-    LINE_USER_ID = "U2ed88abb31838a8ce6b7a97f2fc0c5cf"
-
+    # 從環境變數獲取 LINE TOKEN 和 USER ID
+    LINE_TOKEN = os.environ.get("LINE_TOKEN")
+    LINE_USER_ID = os.environ.get("LINE_USER_ID")
+    
+    # 檢查是否有設定環境變數
+    if not LINE_TOKEN or not LINE_USER_ID:
+        print("錯誤：未設定 LINE_TOKEN 或 LINE_USER_ID 環境變數")
+        return
+    
     crawler = PTTCrawler(line_token=LINE_TOKEN, line_user_id=LINE_USER_ID)
-    gracie_articles = crawler.crawl_articles()
-
-    # 如果想要定時執行，可以使用以下方式
-    # 例如，每小時檢查一次新文章
-    """
-    while True:
-        try:
-            print(f"開始檢查新文章 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            gracie_articles = crawler.crawl_articles(pages=3)
-            print(f"下次檢查將在1小時後進行")
-            # 休息1小時
-            time.sleep(3600)
-        except Exception as e:
-            print(f"發生錯誤: {str(e)}")
-            print("程式將在30分鐘後重試")
-            time.sleep(1800)
-    """
+    crawler.crawl_articles()
 
 if __name__ == "__main__":
     main()
