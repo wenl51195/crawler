@@ -2,10 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import json
-import re
 from datetime import datetime
 import os
-import hashlib
 
 
 class PTTCrawler:
@@ -16,20 +14,17 @@ class PTTCrawler:
         self.base_url = 'https://www.ptt.cc'
         self.board = 'Drama-Ticket'
         self.output_dir = './ptt_drama_ticket_data'
-        self.keyword = 'gracie'  # 關鍵字不區分大小寫
+        self.keyword = 'gracie'
         self.cache_file = f"{self.output_dir}/article_cache.json"
         self.line_token = line_token
         self.line_user_id = line_user_id
 
-        # 確保輸出目錄存在
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
-        # 載入已爬取的文章快取（如果存在）
         self.article_cache = self.load_article_cache()
 
     def load_article_cache(self):
-        """載入已爬取的文章快取"""
         if os.path.exists(self.cache_file):
             try:
                 with open(self.cache_file, 'r', encoding='utf-8') as f:
@@ -39,17 +34,14 @@ class PTTCrawler:
         return {}
 
     def save_article_cache(self):
-        """儲存已爬取的文章快取"""
         with open(self.cache_file, 'w', encoding='utf-8') as f:
             json.dump(self.article_cache, f, ensure_ascii=False, indent=2)
 
     def is_new_article(self, article_url):
-        """檢查是否為新文章"""
         article_id = article_url.split('/')[-1].strip()
         return article_id not in self.article_cache
 
     def mark_article_as_crawled(self, article_url):
-        """標記文章為已爬取"""
         article_id = article_url.split('/')[-1].strip()
         self.article_cache[article_id] = {
             'crawled_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -152,39 +144,10 @@ class PTTCrawler:
                     value = meta_value.text.strip()
                     article_data[key] = value
 
-            # 移除推文和引用後獲取內容
-            content_copy = main_content.prettify()
-            for div in main_content.find_all('div', class_='push'):
-                div.decompose()
-            for meta in metalines:
-                meta.decompose()
-            for meta in main_content.find_all('div', class_='article-metaline-right'):
-                meta.decompose()
-
-            # 提取文章內容
-            # article_data['內容'] = main_content.text.strip()
-
-            # 提取推文
-            pushes = []
-            for push in soup.find_all('div', class_='push'):
-                push_tag = push.find('span', class_='push-tag').text.strip()
-                push_userid = push.find('span', class_='push-userid').text.strip()
-                push_content = push.find('span', class_='push-content').text.strip()
-                push_time = push.find('span', class_='push-ipdatetime').text.strip()
-
-                pushes.append({
-                    'tag': push_tag,
-                    'userid': push_userid,
-                    'content': push_content,
-                    'time': push_time
-                })
-
-            # article_data['推文'] = pushes
-
         return article_data
 
     def crawl_articles(self, max_pages=10):
-        """爬取文章直到遇到已經推送過的文章為止，並篩選包含關鍵字的文章"""
+        """爬取文章直到遇到已經推送過的文章或到達最大爬取頁數為止，並篩選包含關鍵字的文章"""
         current_url = f"{self.base_url}/bbs/{self.board}/index.html"
         gracie_articles = []  # 儲存符合條件的文章
         new_articles_count = 0
@@ -206,14 +169,13 @@ class PTTCrawler:
                 if prev_page_url:
                     current_url = prev_page_url
                     print(f"正在爬取...")
-                    time.sleep(2)  # 頁面之間暫停一下
+                    time.sleep(2)
                     continue
                 else:
                     break
 
             total_articles_checked += len(filtered_articles)
 
-            # 檢查這一頁的文章
             for idx, article in enumerate(filtered_articles):
                 # 檢查是否為新文章
                 if self.is_new_article(article['url']):
@@ -225,7 +187,6 @@ class PTTCrawler:
                         article.update(article_data)
                         gracie_articles.append(article)
 
-                        # 標記為已爬取
                         self.mark_article_as_crawled(article['url'])
 
                         # 發送LINE通知
@@ -239,24 +200,20 @@ class PTTCrawler:
 
                         self.send_line_notification(self.line_token, self.line_user_id, message)
                         new_articles_count += 1
-
-                    # 為了減輕伺服器負擔，每爬取一篇文章後稍微暫停一下
+                        
                     time.sleep(2)
                 else:
                     print(f"  跳過已爬取的文章: {article['title']}")
                     found_old_article = True
                     break
 
-            # 如果發現舊文章或沒有上一頁了，結束迴圈
             if found_old_article or not prev_page_url:
                 break
 
             current_url = prev_page_url
 
-            # 頁面之間暫停一下
             time.sleep(2)
 
-        # 儲存爬取快取
         self.save_article_cache()
 
         # 將結果儲存為JSON檔案
