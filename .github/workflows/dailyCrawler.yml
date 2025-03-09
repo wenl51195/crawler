@@ -31,8 +31,7 @@ jobs:
       run: python ptt_crawler_online.py
         
     - name: Send failure notification
-      # if: failure()
-      if: always()
+      if: failure()
       run: |
         curl -v -X POST https://api.line.me/v2/bot/message/push \
         -H "Content-Type: application/json" \
