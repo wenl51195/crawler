@@ -37,3 +37,18 @@ jobs:
         git add .
         git commit -m "Update data $(date +'%Y-%m-%d %H:%M:%S')" || echo "沒有更改需要提交"
         git push
+        
+    - name: Clean old data # 刪除 30 天前的 JSON 檔案
+      run: |
+        find ./ptt_drama_ticket_data -name "ptt_Drama-Ticket_gracie_*.json" -type f -mtime +30 -delete
+    
+    - name: Send failure notification
+      if: failure()
+      run: |
+        curl -X POST https://api.line.me/v2/bot/message/push \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${{ secrets.LINE_TOKEN }}" \
+        -d '{
+          "to": "${{ secrets.LINE_USER_ID }}",
+          "messages": [{"type": "text", "text": "爬蟲執行失敗，請檢查 GitHub Actions 日誌"}]
+        }'
