@@ -47,7 +47,3 @@ python ptt_crawler.py
 - 爬取頁數
 - 篩選關鍵字
 - 通知訊息格式
-
-## 授權條款
-
-MIT License
