@@ -15,8 +15,9 @@ class PTTCrawler:
         }
         self.base_url = 'https://www.ptt.cc'
         self.board = 'Drama-Ticket'
+        self.keywords = ['換票', '太妍']
+        self.max_pages = 10
         self.output_dir = './ptt_drama_ticket_data'
-        self.keyword = 'gracie'
         self.cache_file = f"{self.output_dir}/article_cache.json"
         self.line_token = line_token
         self.line_user_id = line_user_id
@@ -57,8 +58,8 @@ class PTTCrawler:
         參數:
         access_token (str): 你的 Channel Access Token
         user_id (str): 接收者的 LINE 用戶 ID
-        message (str): 要發送的文字消息
-
+        message (str): 要發送的文字訊息
+        
         返回:
         bool: 發送成功返回 True，否則返回 False
         """
@@ -115,8 +116,16 @@ class PTTCrawler:
                     title = link.text.strip()
                     url = self.base_url + link['href']
 
-                    # 檢查標題是否包含關鍵字（不區分大小寫）
-                    if self.keyword.lower() in title.lower():
+                    # 檢查標題是否包含所有關鍵字
+                    all_keywords_present = True
+
+                    for keyword in self.keywords:
+                        # 檢查關鍵字（英文不區分大小寫）
+                        if keyword.lower() not in title.lower():
+                            all_keywords_present = False
+                            break
+                    
+                    if all_keywords_present:
                         articles.append({
                             'title': title,
                             'url': url
@@ -149,16 +158,16 @@ class PTTCrawler:
 
         return article_data
 
-    def crawl_articles(self, max_pages=20):
-        """爬取文章直到遇到已經推送過的文章或到達最大爬取頁數為止，並篩選包含關鍵字的文章"""
+    def crawl_articles(self):
+        """爬取文章直到遇到已經推送過的文章或到達最大頁數為止，並篩選包含關鍵字的標題"""
         current_url = f"{self.base_url}/bbs/{self.board}/index.html"
-        gracie_articles = []  # 儲存符合條件的文章
+        keyword_articles = []  # 儲存符合條件的標題
         new_articles_count = 0
         total_articles_checked = 0
         page_count = 0
         found_old_article = False
 
-        while page_count < max_pages and not found_old_article:
+        while page_count < self.max_pages and not found_old_article:
             page_count += 1
             print(f"正在爬取第 {page_count} 頁...")
             content = self.get_page_content(current_url)
@@ -187,7 +196,7 @@ class PTTCrawler:
                     if article_content:
                         article_data = self.parse_article_content(article_content)
                         article.update(article_data)
-                        gracie_articles.append(article)
+                        keyword_articles.append(article)
 
                         self.mark_article_as_crawled(article['url'])
 
@@ -225,18 +234,27 @@ class PTTCrawler:
 
         self.save_article_cache()
 
-        # 將結果儲存為JSON檔案
-        if gracie_articles:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{self.output_dir}/ptt_{self.board}_gracie_{timestamp}.json"
+        if keyword_articles:
+            # 相同的關鍵字集合（不同順序）存在同一JSON檔
+            sorted_keywords = sorted([k.lower() for k in self.keywords])
+            keywords_filename = "_".join(sorted_keywords)
+            timestamp = datetime.now().strftime("%Y%m")
+            filename = f"{self.output_dir}/ptt_{self.board}_{keywords_filename}_{timestamp}.json"
+
+            # 將結果儲存為JSON檔案
+            data = []
+            if os.path.exists(filename):
+                with open(filename, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            data.extend(keyword_articles)
             with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(gracie_articles, f, ensure_ascii=False, indent=2)
-            print(f"結果已保存至 {filename}")
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"結果已保存至 {filename}\n")
 
-        print(f"爬蟲完成！共檢查了 {total_articles_checked} 篇文章，其中發現 {new_articles_count} 篇新文章。")
-        print(f"爬取了 {page_count} 頁，{'找到舊文章而停止。' if found_old_article else '達到最大頁數限制或沒有更多頁面。'}")
+        print(f"爬蟲完成，共檢查了 {total_articles_checked} 篇文章，其中發現 {new_articles_count} 篇新文章。")
+        print(f"爬取了 {page_count} 頁，{'找到舊文章而停止。' if found_old_article else '達到最大頁數或沒有更多頁面。'}")
 
-        return gracie_articles
+        return keyword_articles
 
 def main():
     # 配置參數
