@@ -15,8 +15,8 @@ class PTTCrawler:
         }
         self.base_url = 'https://www.ptt.cc'
         self.board = 'Drama-Ticket'
-        self.keywords = ['換票', '太妍']
-        self.max_pages = 10
+        self.keywords = ['售票', 'gracie']
+        self.max_pages = 30
         self.output_dir = './ptt_drama_ticket_data'
         self.cache_file = f"{self.output_dir}/article_cache.json"
         self.line_token = line_token
@@ -249,9 +249,9 @@ class PTTCrawler:
             data.extend(keyword_articles)
             with open(filename, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            print(f"結果已保存至 {filename}\n")
+            print(f"結果已保存至 {filename}")
 
-        print(f"爬蟲完成，共檢查了 {total_articles_checked} 篇文章，其中發現 {new_articles_count} 篇新文章。")
+        print(f"\n爬蟲完成，共檢查了 {total_articles_checked} 篇文章，其中發現 {new_articles_count} 篇新文章。")
         print(f"爬取了 {page_count} 頁，{'找到舊文章而停止。' if found_old_article else '達到最大頁數或沒有更多頁面。'}")
 
         return keyword_articles
