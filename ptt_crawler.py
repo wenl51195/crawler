@@ -7,17 +7,16 @@ import json
 from datetime import datetime
 
 
-
 class PTTCrawler:
-    def __init__(self, line_token=None, line_user_id=None):
+    def __init__(self, board=None, keywords=None, max_pages=None, line_token=None, line_user_id=None):
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         self.base_url = 'https://www.ptt.cc'
-        self.board = 'Drama-Ticket'
-        self.keywords = ['售票', 'gracie']
-        self.max_pages = 30
-        self.output_dir = './ptt_drama_ticket_data'
+        self.board = board
+        self.keywords = keywords
+        self.max_pages = max_pages
+        self.output_dir = f"./ptt_{self.board}_data"
         self.cache_file = f"{self.output_dir}/article_cache.json"
         self.line_token = line_token
         self.line_user_id = line_user_id
@@ -53,15 +52,15 @@ class PTTCrawler:
     # LINE Messaging API 相關函數
     def send_line_notification(self, access_token, user_id, message):
         """
-        使用 LINE Messaging API 發送通知
+        Send notification using LINE Messaging API
 
-        參數:
-        access_token (str): 你的 Channel Access Token
-        user_id (str): 接收者的 LINE 用戶 ID
-        message (str): 要發送的文字訊息
+        Parameters:
+        access_token (str): Your Channel Access Token
+        user_id (str): LINE user ID of the recipient
+        message (str): Text message to be sent
         
-        返回:
-        bool: 發送成功返回 True，否則返回 False
+        Returns:
+        bool: Returns True if sending is successful, otherwise False
         """
         url = 'https://api.line.me/v2/bot/message/push'
 
@@ -90,7 +89,7 @@ class PTTCrawler:
             return False
 
     def get_page_content(self, url):
-        """獲取頁面內容"""
+        """Get page content"""
         try:
             response = requests.get(url, headers=self.headers, cookies={'over18': '1'})
             if response.status_code == 200:
@@ -103,24 +102,24 @@ class PTTCrawler:
             return None
 
     def parse_article_list(self, content):
-        """解析文章列表，返回文章連結和上一頁的連結"""
+        """Parse article list, return article links and link to previous page"""
         soup = BeautifulSoup(content, 'html.parser')
         articles = []
 
-        # 獲取所有文章連結
+        # Get all article links
         for div in soup.find_all('div', class_='r-ent'):
             title_div = div.find('div', class_='title')
             if title_div:
                 link = title_div.find('a')
-                if link:  # 確保連結存在（有些文章可能被刪除）
+                if link:
                     title = link.text.strip()
                     url = self.base_url + link['href']
 
-                    # 檢查標題是否包含所有關鍵字
+                    # Check if title contains all keywords
                     all_keywords_present = True
 
                     for keyword in self.keywords:
-                        # 檢查關鍵字（英文不區分大小寫）
+                        # Check keywords (case-insensitive for English)
                         if keyword.lower() not in title.lower():
                             all_keywords_present = False
                             break
@@ -131,21 +130,21 @@ class PTTCrawler:
                             'url': url
                         })
 
-        # 獲取上一頁連結
+        # Get link to previous page
         prev_page_link = soup.find('a', string='‹ 上頁')
         prev_page_url = self.base_url + prev_page_link['href'] if prev_page_link else None
 
         return articles, prev_page_url
 
     def parse_article_content(self, content):
-        """解析文章內容"""
+        """Parse article content"""
         soup = BeautifulSoup(content, 'html.parser')
         article_data = {}
 
-        # 獲取主要內容
+        # Get main content
         main_content = soup.find('div', id='main-content')
         if main_content:
-            # 提取作者、時間等元信息
+            # Extract data like author, time
             metalines = main_content.find_all('div', class_='article-metaline')
             for meta in metalines:
                 meta_name = meta.find('span', class_='article-meta-tag')
@@ -153,15 +152,15 @@ class PTTCrawler:
                 if meta_name and meta_value:
                     key = meta_name.text.strip()
                     value = meta_value.text.strip()
-                    if key != '標題': # 已有 title 欄位
+                    if key != '標題': # Skip title field as we already have it
                         article_data[key] = value
 
         return article_data
 
     def crawl_articles(self):
-        """爬取文章直到遇到已經推送過的文章或到達最大頁數為止，並篩選包含關鍵字的標題"""
+        """Crawl articles until finding already pushed articles or reaching max pages, and filter titles containing keywords"""
         current_url = f"{self.base_url}/bbs/{self.board}/index.html"
-        keyword_articles = []  # 儲存符合條件的標題
+        keyword_articles = []  # Store articles matching keywords
         new_articles_count = 0
         total_articles_checked = 0
         page_count = 0
@@ -176,7 +175,7 @@ class PTTCrawler:
 
             filtered_articles, prev_page_url = self.parse_article_list(content)
 
-            # 如果這一頁沒有符合關鍵字的文章，繼續下一頁
+            # If no articles matching keywords on this page, continue to next page
             if not filtered_articles:
                 if prev_page_url:
                     current_url = prev_page_url
@@ -188,7 +187,7 @@ class PTTCrawler:
             total_articles_checked += len(filtered_articles)
 
             for idx, article in enumerate(filtered_articles):
-                # 檢查是否為新文章
+                # Check if this is a new article
                 if self.is_new_article(article['url']):
                     print(f"  發現新文章 ({page_count}-{idx+1}): {article['title']}")
                     article_content = self.get_page_content(article['url'])
@@ -200,7 +199,7 @@ class PTTCrawler:
 
                         self.mark_article_as_crawled(article['url'])
 
-                        # 發送LINE通知
+                        # Send LINE notification
                         message = f"\U0001F4E2 發現新文章\n"
                         message += f"\U0001F4DD 標題：{article['title']}\n\U0001F517 連結：{article['url']}"
 
@@ -226,7 +225,7 @@ class PTTCrawler:
             time.sleep(2)
 
         if not content:
-            # 發送LINE通知
+            # Send LINE notification
             message = f"\U0001F6A8 爬蟲失敗"
             self.send_line_notification(self.line_token, self.line_user_id, message)
             return
@@ -235,13 +234,13 @@ class PTTCrawler:
         self.save_article_cache()
 
         if keyword_articles:
-            # 相同的關鍵字集合（不同順序）存在同一JSON檔
+            # Same keyword set (different order) stored in the same JSON file
             sorted_keywords = sorted([k.lower() for k in self.keywords])
             keywords_filename = "_".join(sorted_keywords)
             timestamp = datetime.now().strftime("%Y%m")
             filename = f"{self.output_dir}/ptt_{self.board}_{keywords_filename}_{timestamp}.json"
 
-            # 將結果儲存為JSON檔案
+            # Save results as JSON file
             data = []
             if os.path.exists(filename):
                 with open(filename, 'r', encoding='utf-8') as f:
@@ -257,20 +256,27 @@ class PTTCrawler:
         return keyword_articles
 
 def main():
-    # 配置參數
+    # Set parameters
+    board = 'Drama-Ticket'
+    keywords = ['售票', 'gracie']
+    max_pages = 30
     # Load environment variables from .env file
     load_dotenv()
-
-    # 從環境變數獲取 LINE TOKEN 和 USER ID
-    LINE_TOKEN = os.environ.get("LINE_TOKEN")
+    LINE_TOKEN = os.environ.get("LINE_TOKE")
     LINE_USER_ID = os.environ.get("LINE_USER_ID")
     
-    # 檢查是否有設定環境變數
+    # Check if environment variables are set
     if not LINE_TOKEN or not LINE_USER_ID:
         print("錯誤：未設定 LINE_TOKEN 或 LINE_USER_ID 環境變數")
-        return
+        return 
     
-    crawler = PTTCrawler(line_token=LINE_TOKEN, line_user_id=LINE_USER_ID)
+    crawler = PTTCrawler(
+        board=board,
+        keywords=keywords,
+        max_pages=max_pages,
+        line_token=LINE_TOKEN,
+        line_user_id=LINE_USER_ID
+    )
     crawler.crawl_articles()
 
 if __name__ == "__main__":
