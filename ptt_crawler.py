@@ -262,7 +262,7 @@ def main():
     max_pages = 30
     # Load environment variables from .env file
     load_dotenv()
-    LINE_TOKEN = os.environ.get("LINE_TOKE")
+    LINE_TOKEN = os.environ.get("LINE_TOKEN")
     LINE_USER_ID = os.environ.get("LINE_USER_ID")
     
     # Check if environment variables are set
