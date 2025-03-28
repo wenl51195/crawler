@@ -50,19 +50,8 @@ class PTTCrawler:
             'crawled_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-    # LINE Messaging API 相關函數
+    # LINE Messaging API
     def send_line_notification(self, access_token, user_id, message):
-        """
-        Send notification using LINE Messaging API
-
-        Parameters:
-        access_token (str): Your Channel Access Token
-        user_id (str): LINE user ID of the recipient
-        message (str): Text message to be sent
-        
-        Returns:
-        bool: Returns True if sending is successful, otherwise False
-        """
         url = 'https://api.line.me/v2/bot/message/push'
 
         headers = {
@@ -84,10 +73,19 @@ class PTTCrawler:
 
         if response.status_code == 200:
             print("LINE 通知發送成功！")
-            return True
         else:
             print(f"LINE 通知發送失敗。狀態碼: {response.status_code}\n回應: {response.text}")
-            return False
+    
+    # LINE message format
+    def send_line_message_format(self, article):
+        message = f"\U0001F4DD 標題：{article['title']}\n\U0001F517 連結：{article['url']}"
+
+        if '時間' in article:
+            message += f"\n\U0001F552 發布時間：{article['時間']}"
+        if '作者' in article:
+            message += f"\n\U0000270D\U0000FE0F 作者：{article['作者']}"
+        
+        return message
 
     def get_page_content(self, url):
         """Get page content"""
@@ -178,6 +176,9 @@ class PTTCrawler:
 
             filtered_articles, prev_page_url = self.parse_article_list(content)
 
+            # Reverse the order of filtered_articles to process the most recent articles first
+            filtered_articles.reverse()
+
             # If no articles matching keywords on this page, continue to next page
             if not filtered_articles:
                 if prev_page_url:
@@ -203,13 +204,7 @@ class PTTCrawler:
                         self.mark_article_as_crawled(article['url'])
 
                         # Send LINE notification
-                        message = f"\U0001F4DD 標題：{article['title']}\n\U0001F517 連結：{article['url']}"
-
-                        if '時間' in article_data:
-                            message += f"\n\U0001F552 發布時間：{article_data['時間']}"
-                        if '作者' in article_data:
-                            message += f"\n\U0000270D\U0000FE0F 作者：{article_data['作者']}"
-
+                        message = self.send_line_message_format(article)
                         self.send_line_notification(self.line_token, self.line_user_id, message)
                         new_articles_count += 1
                         
@@ -239,7 +234,10 @@ class PTTCrawler:
             # Combine keywords for filename
             sorted_ticket_keywords = sorted([k.lower() for k in self.ticket_keywords])
             sorted_artist_keywords = sorted([k.lower() for k in self.artist_keywords])
-            keywords_filename = f"ticket_{'-'.join(sorted_ticket_keywords)}_name_{'-'.join(sorted_artist_keywords)}"
+            if not sorted_ticket_keywords or sorted_ticket_keywords == ['']:
+                keywords_filename = f"{''.join(sorted_artist_keywords)}"
+            else:
+                keywords_filename = f"[{'/'.join(sorted_ticket_keywords)}]_{''.join(sorted_artist_keywords)}"
             timestamp = datetime.now().strftime("%Y%m")
             filename = f"{self.output_dir}/ptt_{self.board}_{keywords_filename}_{timestamp}.json"
 
@@ -253,16 +251,15 @@ class PTTCrawler:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             print(f"結果已保存至 {filename}")
 
-        print(f"\n爬蟲完成，共檢查了 {total_articles_checked} 篇文章，其中發現 {new_articles_count} 篇新文章。")
-        print(f"爬取了 {page_count} 頁，{'找到舊文章而停止。' if found_old_article else '達到最大頁數或沒有更多頁面。'}")
+        print(f"\n{self.artist_keywords} 爬蟲完成，找到了 {total_articles_checked} 篇文章，其中有 {new_articles_count} 篇新文章。")
 
         return keyword_articles
 
 def main():
     # Set parameters
     board = 'Drama-Ticket'
-    ticket_keywords = [] # 售票 / 換票 / 降售 / 售
-    artist_keywords = ['babymonster', '寶怪', 'gracie']
+    ticket_keywords = []  # '售票' / '換票' / '降售' / '售' /
+    artist_keywords = ['gracie']
     max_pages = 50
 
     # Load environment variables from .env file
