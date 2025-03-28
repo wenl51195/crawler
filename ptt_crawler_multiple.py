@@ -6,7 +6,7 @@ import time
 import json
 from datetime import datetime
 import concurrent.futures
-
+import threading
 
 class PTTCrawler:
     def __init__(self, board=None, ticket_keywords=None, artist_keywords =None, max_pages=None, line_token=None, line_user_id=None):
@@ -22,6 +22,7 @@ class PTTCrawler:
         self.cache_file = f"{self.output_dir}/article_cache.json"
         self.line_token = line_token
         self.line_user_id = line_user_id
+        self.cache_lock = threading.Lock()
 
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
@@ -37,20 +38,19 @@ class PTTCrawler:
                 return {}
         return {}
 
-    def save_article_cache(self):
-        with open(self.cache_file, 'w', encoding='utf-8') as f:
-            json.dump(self.article_cache, f, ensure_ascii=False, indent=2)
-
     def is_new_article(self, article_url):
         article_id = article_url.split('/')[-1].strip()
         return article_id not in self.article_cache
 
     def mark_article_as_crawled(self, article_url):
         article_id = article_url.split('/')[-1].strip()
-        self.article_cache[article_id] = {
-            'crawled_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
+        self.article_cache[article_id] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    def save_article_cache(self):
+        with self.cache_lock:
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(self.article_cache, f, ensure_ascii=False, indent=2)
+    
     # LINE Messaging API 相關函數
     def send_line_notification(self, access_token, user_id, message):
         """
@@ -245,21 +245,16 @@ class PTTCrawler:
             # Combine keywords for filename
             sorted_ticket_keywords = sorted([k.lower() for k in self.ticket_keywords])
             sorted_artist_keywords = sorted([k.lower() for k in self.artist_keywords])
-            if sorted_ticket_keywords or sorted_ticket_keywords != ['']:
-                keywords_filename = f"[{'/'.join(sorted_ticket_keywords)}]_{''.join(sorted_artist_keywords)}"
-            else:
+            if not sorted_ticket_keywords or sorted_ticket_keywords == ['']:
                 keywords_filename = f"{''.join(sorted_artist_keywords)}"
+            else:
+                keywords_filename = f"[{'/'.join(sorted_ticket_keywords)}]_{''.join(sorted_artist_keywords)}"
             timestamp = datetime.now().strftime("%Y%m")
             filename = f"{self.output_dir}/ptt_{self.board}_{keywords_filename}_{timestamp}.json"
 
             # Save results as JSON file
-            data = []
-            if os.path.exists(filename):
-                with open(filename, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-            data.extend(keyword_articles)
-            with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            with open(filename, 'a', encoding='utf-8') as f:
+                json.dump(keyword_articles, f, ensure_ascii=False, indent=2)
             print(f"結果已保存至 {filename}")
 
         print(f"\n{self.artist_keywords} 爬蟲完成，找到了 {total_articles_checked} 篇文章，其中有 {new_articles_count} 篇新文章。")
@@ -282,7 +277,8 @@ def run_crawlers_concurrently(artists_groups, board, ticket_keywords, max_pages,
         ]
 
         # Submit crawlers to thread pool
-        futures = {executor.submit(crawler.crawl_articles): crawler for crawler in crawlers}
+        for crawler in crawlers:
+            executor.submit(crawler.crawl_articles)
     
 def main():
     # Load environment variables from .env file
@@ -297,8 +293,8 @@ def main():
     
     # Set parameters
     board = 'Drama-Ticket'
-    ticket_keywords = []  # '售票' / '換票' / '降售' / '售' /
-    max_pages = 50
+    ticket_keywords = ['售']  # '售票' / '換票' / '降售' / '售' /
+    max_pages = 30
     
     # Set multiple artists to search
     # The same artist keyword put in the same list
