@@ -22,13 +22,13 @@ class PTTCrawler:
         self.cache_file = f"{self.output_dir}/article_cache.json"
         self.line_token = line_token
         self.line_user_id = line_user_id
+        self.article_cache = self.load_article_cache()
+        self.new_article_cache = {}
         self.cache_lock = threading.Lock()
 
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
-
-        self.article_cache = self.load_article_cache()
-
+        
     def load_article_cache(self):
         if os.path.exists(self.cache_file):
             try:
@@ -44,10 +44,11 @@ class PTTCrawler:
 
     def mark_article_as_crawled(self, article_url):
         article_id = article_url.split('/')[-1].strip()
-        self.article_cache[article_id] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.new_article_cache[article_id] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     def save_article_cache(self):
         with self.cache_lock:
+            self.article_cache.update(self.new_article_cache)
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self.article_cache, f, ensure_ascii=False, indent=2)
     
@@ -84,9 +85,9 @@ class PTTCrawler:
         response = requests.post(url, headers=headers, data=json.dumps(data))
 
         if response.status_code == 200:
-            print("LINE 通知發送成功！")
+            print("  LINE 通知發送成功！")
         else:
-            print(f"LINE 通知發送失敗。狀態碼: {response.status_code}\n回應: {response.text}")
+            print(f"  LINE 通知發送失敗。狀態碼: {response.status_code}\n  回應: {response.text}")
 
     # LINE message format
     def send_line_message_format(self, article):
@@ -231,16 +232,9 @@ class PTTCrawler:
             current_url = prev_page_url
 
             time.sleep(2)
-
-        if not content:
-            # Send LINE notification
-            message = f"\U0001F6A8 爬蟲失敗"
-            self.send_line_notification(self.line_token, self.line_user_id, message)
-            return
-
-
+        
         self.save_article_cache()
-
+        
         if keyword_articles:
             # Combine keywords for filename
             sorted_ticket_keywords = sorted([k.lower() for k in self.ticket_keywords])
@@ -251,15 +245,19 @@ class PTTCrawler:
                 keywords_filename = f"[{'/'.join(sorted_ticket_keywords)}]_{''.join(sorted_artist_keywords)}"
             timestamp = datetime.now().strftime("%Y%m")
             filename = f"{self.output_dir}/ptt_{self.board}_{keywords_filename}_{timestamp}.json"
-
+            
             # Save results as JSON file
-            with open(filename, 'a', encoding='utf-8') as f:
-                json.dump(keyword_articles, f, ensure_ascii=False, indent=2)
-            print(f"結果已保存至 {filename}")
+            data = []
+            if os.path.exists(filename):
+                with open(filename, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            data.extend(keyword_articles)
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"  結果已保存至 {filename}")
 
-        print(f"\n{self.artist_keywords} 爬蟲完成，找到了 {total_articles_checked} 篇文章，其中有 {new_articles_count} 篇新文章。")
+        return total_articles_checked, new_articles_count
 
-        return keyword_articles
 
 def run_crawlers_concurrently(artists_groups, board, ticket_keywords, max_pages, line_token, line_user_id):
     """Run multiple PTT crawlers concurrently for different artist groups"""
@@ -277,9 +275,16 @@ def run_crawlers_concurrently(artists_groups, board, ticket_keywords, max_pages,
         ]
 
         # Submit crawlers to thread pool
-        for crawler in crawlers:
-            executor.submit(crawler.crawl_articles)
-    
+        futures = {executor.submit(crawler.crawl_articles): crawler for crawler in crawlers}
+
+        # Collect results
+        results = []
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            results.append(result)
+        
+        return results
+
 def main():
     # Load environment variables from .env file
     load_dotenv()
@@ -304,7 +309,7 @@ def main():
     ]
 
     # Run crawlers concurrently
-    run_crawlers_concurrently(
+    results = run_crawlers_concurrently(
         artists_groups=artists_groups,
         board=board,
         ticket_keywords=ticket_keywords,
@@ -312,6 +317,10 @@ def main():
         line_token=LINE_TOKEN,
         line_user_id=LINE_USER_ID
     )
+    
+    print("\n-----爬蟲完成-----")
+    for artist_group, (total_articles_checked, new_articles_count) in zip(artists_groups, results):
+        print(f"{artist_group} 找到了 {total_articles_checked} 篇文章，其中有 {new_articles_count} 篇新文章。")
 
 if __name__ == "__main__":
     main()
