@@ -21,11 +21,10 @@ class PTTCrawler:
         self.cache_file = f"{self.output_dir}/article_cache.json"
         self.line_token = line_token
         self.line_user_id = line_user_id
+        self.article_cache = self.load_article_cache()
 
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
-
-        self.article_cache = self.load_article_cache()
 
     def load_article_cache(self):
         if os.path.exists(self.cache_file):
@@ -70,9 +69,9 @@ class PTTCrawler:
         response = requests.post(url, headers=headers, data=json.dumps(data))
 
         if response.status_code == 200:
-            print("LINE 通知發送成功！")
+            print("  LINE 通知發送成功！")
         else:
-            print(f"LINE 通知發送失敗。狀態碼: {response.status_code}\n回應: {response.text}")
+            print(f"  LINE 通知發送失敗。狀態碼: {response.status_code}\n  回應: {response.text}")
     
     # LINE message format
     def send_line_message_format(self, article):
@@ -219,13 +218,6 @@ class PTTCrawler:
 
             time.sleep(2)
 
-        if not content:
-            # Send LINE notification
-            message = f"\U0001F6A8 爬蟲失敗"
-            self.send_line_notification(self.line_token, self.line_user_id, message)
-            return
-
-
         self.save_article_cache()
 
         if keyword_articles:
@@ -240,20 +232,25 @@ class PTTCrawler:
             filename = f"{self.output_dir}/ptt_{self.board}_{keywords_filename}_{timestamp}.json"
 
             # Save results as JSON file
-            with open(filename, 'a', encoding='utf-8') as f:
-                json.dump(keyword_articles, f, ensure_ascii=False, indent=2)
-            print(f"結果已保存至 {filename}")
+            data = []
+            if os.path.exists(filename):
+                with open(filename, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            data.extend(keyword_articles)
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"  結果已保存至 {filename}")
 
-        print(f"\n{self.artist_keywords} 爬蟲完成，找到了 {total_articles_checked} 篇文章，其中有 {new_articles_count} 篇新文章。")
+        # print(f"\n{self.artist_keywords} 爬蟲完成，找到了 {total_articles_checked} 篇文章，其中有 {new_articles_count} 篇新文章。")
 
-        return keyword_articles
+        return total_articles_checked, new_articles_count
 
 def main():
     # Set parameters
     board = 'Drama-Ticket'
     ticket_keywords = []  # '售票' / '換票' / '降售' / '售' /
     artist_keywords = ['gracie']
-    max_pages = 50
+    max_pages = 30
 
     # Load environment variables from .env file
     load_dotenv()
@@ -273,7 +270,10 @@ def main():
         line_token=LINE_TOKEN,
         line_user_id=LINE_USER_ID
     )
-    crawler.crawl_articles()
+    total_articles_checked, new_articles_count = crawler.crawl_articles()
+
+    print("\n-----爬蟲完成-----")
+    print(f"{artist_keywords} 找到了 {total_articles_checked} 篇文章，其中有 {new_articles_count} 篇新文章。")
 
 if __name__ == "__main__":
     main()
