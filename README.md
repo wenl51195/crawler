@@ -36,14 +36,16 @@ python ptt_crawler.py
 ### 功能說明
 
 - 爬取指定 PTT 看板的最新文章
-- 根據關鍵字篩選標題
-- 將符合條件的標題文章資訊透過 LINE 發送通知訊息
+- 根據票種、藝人關鍵字篩選文章標題
+- 記錄已爬取文章，避免重複
+- 透過 LINE Bot 即時推送通知
 
 ## 自訂設定
 
-可以在程式碼中修改以下參數：
+在 `ptt_crawler.py` 的 `main()` 中修改以下參數：
 
-- 目標看板名稱 (board)
-- 篩選關鍵字 (keyword)
-- 爬取最大頁數 (max_pages)
+- `board`：目標看板名稱
+- `ticket_keywords`：票種關鍵字
+- `artist_keywords`：藝人關鍵字
+- `max_pages`：爬取最大頁數
 - 通知訊息格式
