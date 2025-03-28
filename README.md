@@ -27,25 +27,32 @@ LINE_USER_ID=your_line_user_id_here
 
 ## 使用方式
 
-執行主程式：
-
+搜尋單一藝人使用：
 ```bash
 python ptt_crawler.py
+```
+
+搜尋多位藝人使用：
+```bash
+python ptt_crawler_multiple.py
 ```
 
 ### 功能說明
 
 - 爬取指定 PTT 看板的最新文章
-- 根據票種、藝人關鍵字篩選文章標題
-- 記錄已爬取文章，避免重複
+- 根據票種、藝人關鍵字（不區分大小寫）篩選文章標題
+- 支持單一和多藝人爬蟲
+- 記錄已爬取文章避免重複
 - 透過 LINE Bot 即時推送通知
 
-## 自訂設定
+## 參數設定
 
-在 `ptt_crawler.py` 的 `main()` 中修改以下參數：
+`main()` 中修改以下參數：
 
 - `board`：目標看板名稱
 - `ticket_keywords`：票種關鍵字
 - `artist_keywords`：藝人關鍵字
+- `artists_groups`：多位藝人關鍵字
 - `max_pages`：爬取最大頁數
-- 通知訊息格式
+
+`send_line_message_format()` 修改通知訊息內容
