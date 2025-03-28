@@ -116,12 +116,12 @@ class PTTCrawler:
                     title = link.text.strip()
                     url = self.base_url + link['href']
 
-                    # Check if title contains all keywords
-                    ticket_keyword_match = any(
+                    # Check for both ticket and artist keywords
+                    ticket_keyword_match = not self.ticket_keywords or any(
                         keyword.lower() in title.lower() 
                         for keyword in self.ticket_keywords
                     )
-                    artist_keyword_match = any(
+                    artist_keyword_match = not self.artist_keywords or any(
                         keyword.lower() in title.lower() 
                         for keyword in self.artist_keywords 
                     )
@@ -192,6 +192,7 @@ class PTTCrawler:
             for idx, article in enumerate(filtered_articles):
                 # Check if this is a new article
                 if self.is_new_article(article['url']):
+                    print(f"  發現新文章 ({page_count}-{idx+1}): {article['title']}")
                     article_content = self.get_page_content(article['url'])
 
                     if article_content:
@@ -202,8 +203,7 @@ class PTTCrawler:
                         self.mark_article_as_crawled(article['url'])
 
                         # Send LINE notification
-                        message = f"\U0001F4E2 發現新文章\n"
-                        message += f"\U0001F4DD 標題：{article['title']}\n\U0001F517 連結：{article['url']}"
+                        message = f"\U0001F4DD 標題：{article['title']}\n\U0001F517 連結：{article['url']}"
 
                         if '時間' in article_data:
                             message += f"\n\U0001F552 發布時間：{article_data['時間']}"
@@ -261,8 +261,8 @@ class PTTCrawler:
 def main():
     # Set parameters
     board = 'Drama-Ticket'
-    ticket_keywords = ['售票', '降售'] # 售票 / 換票 / 降售
-    artist_keywords = ['babymonster', '寶怪']
+    ticket_keywords = [] # 售票 / 換票 / 降售 / 售
+    artist_keywords = ['babymonster', '寶怪', 'gracie']
     max_pages = 50
 
     # Load environment variables from .env file
