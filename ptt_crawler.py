@@ -36,20 +36,18 @@ class PTTCrawler:
                 return {}
         return {}
 
-    def save_article_cache(self):
-        with open(self.cache_file, 'w', encoding='utf-8') as f:
-            json.dump(self.article_cache, f, ensure_ascii=False, indent=2)
-
     def is_new_article(self, article_url):
         article_id = article_url.split('/')[-1].strip()
         return article_id not in self.article_cache
 
     def mark_article_as_crawled(self, article_url):
         article_id = article_url.split('/')[-1].strip()
-        self.article_cache[article_id] = {
-            'crawled_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
+        self.article_cache[article_id] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    def save_article_cache(self):
+        with open(self.cache_file, 'w', encoding='utf-8') as f:
+            json.dump(self.article_cache, f, ensure_ascii=False, indent=2)
+    
     # LINE Messaging API
     def send_line_notification(self, access_token, user_id, message):
         url = 'https://api.line.me/v2/bot/message/push'
@@ -242,13 +240,8 @@ class PTTCrawler:
             filename = f"{self.output_dir}/ptt_{self.board}_{keywords_filename}_{timestamp}.json"
 
             # Save results as JSON file
-            data = []
-            if os.path.exists(filename):
-                with open(filename, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-            data.extend(keyword_articles)
-            with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            with open(filename, 'a', encoding='utf-8') as f:
+                json.dump(keyword_articles, f, ensure_ascii=False, indent=2)
             print(f"結果已保存至 {filename}")
 
         print(f"\n{self.artist_keywords} 爬蟲完成，找到了 {total_articles_checked} 篇文章，其中有 {new_articles_count} 篇新文章。")
