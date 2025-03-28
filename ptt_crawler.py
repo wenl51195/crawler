@@ -8,13 +8,14 @@ from datetime import datetime
 
 
 class PTTCrawler:
-    def __init__(self, board=None, keywords=None, max_pages=None, line_token=None, line_user_id=None):
+    def __init__(self, board=None, ticket_keywords=None, artist_keywords =None, max_pages=None, line_token=None, line_user_id=None):
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         self.base_url = 'https://www.ptt.cc'
         self.board = board
-        self.keywords = keywords
+        self.ticket_keywords = ticket_keywords or []
+        self.artist_keywords  = artist_keywords  or []
         self.max_pages = max_pages
         self.output_dir = f"./ptt_{self.board}_data"
         self.cache_file = f"{self.output_dir}/article_cache.json"
@@ -116,15 +117,17 @@ class PTTCrawler:
                     url = self.base_url + link['href']
 
                     # Check if title contains all keywords
-                    all_keywords_present = True
+                    ticket_keyword_match = any(
+                        keyword.lower() in title.lower() 
+                        for keyword in self.ticket_keywords
+                    )
+                    artist_keyword_match = any(
+                        keyword.lower() in title.lower() 
+                        for keyword in self.artist_keywords 
+                    )
 
-                    for keyword in self.keywords:
-                        # Check keywords (case-insensitive for English)
-                        if keyword.lower() not in title.lower():
-                            all_keywords_present = False
-                            break
-                    
-                    if all_keywords_present:
+                    # Only add article if it contains both types of keywords
+                    if ticket_keyword_match and artist_keyword_match:
                         articles.append({
                             'title': title,
                             'url': url
@@ -189,7 +192,6 @@ class PTTCrawler:
             for idx, article in enumerate(filtered_articles):
                 # Check if this is a new article
                 if self.is_new_article(article['url']):
-                    print(f"  發現新文章 ({page_count}-{idx+1}): {article['title']}")
                     article_content = self.get_page_content(article['url'])
 
                     if article_content:
@@ -234,9 +236,10 @@ class PTTCrawler:
         self.save_article_cache()
 
         if keyword_articles:
-            # Same keyword set (different order) stored in the same JSON file
-            sorted_keywords = sorted([k.lower() for k in self.keywords])
-            keywords_filename = "_".join(sorted_keywords)
+            # Combine keywords for filename
+            sorted_ticket_keywords = sorted([k.lower() for k in self.ticket_keywords])
+            sorted_artist_keywords = sorted([k.lower() for k in self.artist_keywords])
+            keywords_filename = f"ticket_{'-'.join(sorted_ticket_keywords)}_name_{'-'.join(sorted_artist_keywords)}"
             timestamp = datetime.now().strftime("%Y%m")
             filename = f"{self.output_dir}/ptt_{self.board}_{keywords_filename}_{timestamp}.json"
 
@@ -258,8 +261,10 @@ class PTTCrawler:
 def main():
     # Set parameters
     board = 'Drama-Ticket'
-    keywords = ['售票', 'gracie']
-    max_pages = 30
+    ticket_keywords = ['售票', '降售'] # 售票 / 換票 / 降售
+    artist_keywords = ['babymonster', '寶怪']
+    max_pages = 50
+
     # Load environment variables from .env file
     load_dotenv()
     LINE_TOKEN = os.environ.get("LINE_TOKEN")
@@ -272,7 +277,8 @@ def main():
     
     crawler = PTTCrawler(
         board=board,
-        keywords=keywords,
+        ticket_keywords=ticket_keywords,
+        artist_keywords=artist_keywords,
         max_pages=max_pages,
         line_token=LINE_TOKEN,
         line_user_id=LINE_USER_ID
