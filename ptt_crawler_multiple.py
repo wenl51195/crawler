@@ -48,9 +48,12 @@ class PTTCrawler:
 
     def save_article_cache(self):
         with self.cache_lock:
-            self.article_cache.update(self.new_article_cache)
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
+                latest_cache = json.load(f)
+            latest_cache.update(self.new_article_cache)
             with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(self.article_cache, f, ensure_ascii=False, indent=2)
+                json.dump(latest_cache, f, ensure_ascii=False, indent=2)
+                print(json.dumps(latest_cache, ensure_ascii=False, indent=2))
     
     # LINE Messaging API 相關函數
     def send_line_notification(self, access_token, user_id, message):
@@ -256,7 +259,11 @@ class PTTCrawler:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             print(f"  結果已保存至 {filename}")
 
-        return total_articles_checked, new_articles_count
+        return {
+            'artist_keywords': self.artist_keywords,
+            'total_articles_checked': total_articles_checked,
+            'new_articles_count': new_articles_count
+        }
 
 
 def run_crawlers_concurrently(artists_groups, board, ticket_keywords, max_pages, line_token, line_user_id):
@@ -275,13 +282,14 @@ def run_crawlers_concurrently(artists_groups, board, ticket_keywords, max_pages,
         ]
 
         # Submit crawlers to thread pool
-        futures = {executor.submit(crawler.crawl_articles): crawler for crawler in crawlers}
+        futures = {executor.submit(crawler.crawl_articles): idx for idx, crawler in enumerate(crawlers)}
 
         # Collect results
-        results = []
+        results = [None] * len(artists_groups)
         for future in concurrent.futures.as_completed(futures):
+            idx = futures[future]
             result = future.result()
-            results.append(result)
+            results[idx] = result
         
         return results
 
@@ -319,7 +327,10 @@ def main():
     )
     
     print("\n-----爬蟲完成-----")
-    for artist_group, (total_articles_checked, new_articles_count) in zip(artists_groups, results):
+    for result in results:
+        artist_group = result['artist_keywords']
+        total_articles_checked = result['total_articles_checked']
+        new_articles_count = result['new_articles_count']
         print(f"{artist_group} 找到了 {total_articles_checked} 篇文章，其中有 {new_articles_count} 篇新文章。")
 
 if __name__ == "__main__":
