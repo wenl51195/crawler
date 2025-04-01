@@ -73,8 +73,8 @@ class PTTCrawler:
         else:
             print(f"  LINE 通知發送失敗。狀態碼: {response.status_code}\n  回應: {response.text}")
     
-    # LINE message format
-    def send_line_message_format(self, article):
+    # Format message for LINE notification
+    def format_message(self, article):
         message = f"\U0001F4DD 標題：{article['title']}\n\U0001F517 連結：{article['url']}"
 
         if '時間' in article:
@@ -83,6 +83,23 @@ class PTTCrawler:
             message += f"\n\U0000270D\U0000FE0F 作者：{article['作者']}"
         
         return message
+    
+    # Format batch message for LINE notification
+    def format_batch_message(self, articles):
+        message = f"發現 {len(articles)} 篇新文章：\n\n"
+        
+        for article in articles:
+            message += f"\U0001F4DD 標題：{article['title']}\n"
+            message += f"\U0001F517 連結：{article['url']}\n"
+            
+            if '時間' in article:
+                message += f"\U0001F552 發布時間：{article['時間']}\n"
+            if '作者' in article:
+                message += f"\U0000270D\U0000FE0F 作者：{article['作者']}\n"
+            
+            message += "\n"
+        
+        return message.strip()
 
     def get_page_content(self, url):
         """Get page content"""
@@ -159,10 +176,12 @@ class PTTCrawler:
         """Crawl articles until finding already pushed articles or reaching max pages, and filter titles containing keywords"""
         current_url = f"{self.base_url}/bbs/{self.board}/index.html"
         keyword_articles = []  # Store articles matching keywords
+        new_articles = []
         new_articles_count = 0
         total_articles_checked = 0
         page_count = 0
         found_old_article = False
+        batch_size = 5  # Send notification for every 5 articles
 
         while page_count < self.max_pages and not found_old_article:
             page_count += 1
@@ -197,13 +216,16 @@ class PTTCrawler:
                         article_data = self.parse_article_content(article_content)
                         article.update(article_data)
                         keyword_articles.append(article)
+                        new_articles.append(article)
 
                         self.mark_article_as_crawled(article['url'])
-
-                        # Send LINE notification
-                        message = self.send_line_message_format(article)
-                        self.send_line_notification(self.line_token, self.line_user_id, message)
                         new_articles_count += 1
+                        
+                        # Send batched notification when reaching the batch size
+                        if len(new_articles) >= batch_size:
+                            batch_message = self.format_batch_message(new_articles)
+                            self.send_line_notification(self.line_token, self.line_user_id, batch_message)
+                            new_articles = []
                         
                     time.sleep(2)
                 else:
@@ -215,8 +237,12 @@ class PTTCrawler:
                 break
 
             current_url = prev_page_url
-
             time.sleep(2)
+
+        # Send remaining articles if less than batch_size
+        if new_articles:
+            batch_message = self.format_batch_message(new_articles)
+            self.send_line_notification(self.line_token, self.line_user_id, batch_message)
 
         self.save_article_cache()
 
